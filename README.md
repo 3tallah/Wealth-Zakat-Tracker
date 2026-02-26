@@ -1,4 +1,4 @@
-# Zakat & Net Worth Tracker - اداة حساب الثروة والزكاة.html
+# Zakat & Net Worth Tracker - اداة حساب الثروة والزكاة
 
 ![Language](https://img.shields.io/badge/Language-Arabic%20%2F%20English-84cc16)
 ![Type](https://img.shields.io/badge/Type-Web%20App-0ea5e9)
@@ -12,6 +12,8 @@ A simple bilingual (Arabic/English) Zakah and wealth tracking app that helps use
 - Auto-fetch exchange rates and 24K gold price from API
 - Estimate gold value from weight by karat (18/21/24)
 - Export reports to Excel and PDF
+
+🌐 **[Live Calculator | حساب الزكاة عبر هذا الرابط](https://zakat.mahmoudatallah.com/)**
 
 ## ✨ Features
 This app is designed to make Zakah estimation clear, practical, and fast for day-to-day use.
