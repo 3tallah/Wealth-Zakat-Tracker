@@ -1,5 +1,19 @@
 # Release Notes
 
+## v2026.02.27
+
+### Highlights
+- Enforced gold nisab logic by total 24K-equivalent weight across all gold assets (85g threshold) and auto-synced old records.
+- Added session persistence so assets, debts, rates, and dashboard context survive page refresh in the same browser session.
+- Improved exports for history tracking:
+	- Excel now includes description and notes columns for each asset.
+	- PDF now includes dashboard context and renders Arabic text correctly.
+- Updated Google Analytics tag to measurement ID `G-Z585XQG0EG`.
+
+### Notes
+- PDF generation now uses HTML snapshot rendering to preserve Arabic labels and notes.
+- This release focuses on data continuity, reporting quality, and production analytics alignment.
+
 ## v2026.02.26.1
 
 ### Highlights
