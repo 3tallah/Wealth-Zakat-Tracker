@@ -1,5 +1,16 @@
 # Release Notes
 
+## v2026.02.26.1
+
+### Highlights
+- Added in-app screenshot-ready demo data controls (fill/remove) for easier presentation flows.
+- Added and linked a full screenshots gallery in `README.md`.
+- Added footer shortcut to open GitHub Issues directly for user feedback.
+- Updated Azure Static Web Apps workflow output folder to `dist` for Vite compatibility.
+
+### Notes
+- Release metadata and tag created after repository history reset to a single publishing commit.
+
 ## v2026.02.26
 
 ### Highlights
