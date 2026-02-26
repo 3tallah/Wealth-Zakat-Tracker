@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+import html2canvas from "html2canvas";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend } from "recharts";
 
 const INITIAL_EXCHANGE = {
@@ -588,22 +588,26 @@ export default function App() {
     wsSummary["!cols"] = [{ wch: 32 }, { wch: 24 }];
     XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
-    const detailsHeader = [["#", "Name", "Name EN", "Category", "Currency", "Original Value", "Value EGP", "Zakatable", "Zakat Base %", "Zakat Due EGP"]];
+    const detailsHeader = [["#", "Name", "Name EN", "Description", "Description EN", "Category", "Currency", "Original Value", "Value EGP", "Zakatable", "Zakat Base %", "Notes", "Notes EN", "Zakat Due EGP"]];
     const detailsRows = computed.assetsWithEGP.map((a, i) => [
       i + 1,
       a.name,
       a.nameEn || "",
+      a.description || "",
+      a.descriptionEn || "",
       a.category,
       a.currency,
       a.value,
       Math.round(a.valueEGP),
       a.effectiveZakatable ? "Yes" : "No",
       Math.round((a.zakatBasis || 1) * 100),
+      a.notes || "",
+      a.notesEn || "",
       Math.round(a.zakatDueEGP),
     ]);
 
     const wsDetails = XLSX.utils.aoa_to_sheet([...detailsHeader, ...detailsRows]);
-    wsDetails["!cols"] = [{ wch: 5 }, { wch: 28 }, { wch: 28 }, { wch: 20 }, { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
+    wsDetails["!cols"] = [{ wch: 5 }, { wch: 28 }, { wch: 28 }, { wch: 34 }, { wch: 34 }, { wch: 20 }, { wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 12 }, { wch: 12 }, { wch: 40 }, { wch: 40 }, { wch: 14 }];
     XLSX.utils.book_append_sheet(wb, wsDetails, "Assets");
 
     const ratesHeader = [["Currency", "to EGP", "Last Updated"]];
@@ -616,77 +620,176 @@ export default function App() {
     setAppNotice(t.exportDone);
   };
 
-  const exportToPdf = () => {
+  const exportToPdf = async () => {
     const now = new Date();
-    const doc = new jsPDF({ unit: "pt", format: "a4" });
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const marginX = 36;
-    const toPdfSafeText = (text, fallback) => {
-      const value = String(text || "").trim();
-      if (!value) return fallback;
-      return /[^\x00-\x7F]/.test(value) ? fallback : value;
-    };
+    const escapeHtml = (value) => String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
 
-    doc.setFillColor(22, 27, 34);
-    doc.rect(0, 0, pageWidth, 90, "F");
-    doc.setTextColor(255, 217, 61);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(20);
-    doc.text("Wealth & Zakat Report", marginX, 40);
-    doc.setTextColor(210, 217, 200);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(`Generated: ${now.toLocaleString()}`, marginX, 58);
-    doc.text(`Rates Updated: ${ratesLastUpdated || "N/A"}`, marginX, 72);
+    const reportRoot = document.createElement("div");
+    reportRoot.style.position = "fixed";
+    reportRoot.style.left = "-10000px";
+    reportRoot.style.top = "0";
+    reportRoot.style.width = "1200px";
+    reportRoot.style.background = "#0f172a";
+    reportRoot.style.color = "#e2e8f0";
+    reportRoot.style.fontFamily = "'Almarai', 'Cairo', sans-serif";
+    reportRoot.style.direction = isRtl ? "rtl" : "ltr";
+    reportRoot.style.padding = "24px";
+    reportRoot.style.boxSizing = "border-box";
 
-    autoTable(doc, {
-      startY: 108,
-      head: [["Summary", "Value (EGP)"]],
-      body: [
-        ["Total Assets", Math.round(computed.totalAssets).toLocaleString()],
-        ["Total Liabilities", Math.round(computed.totalLiabilities).toLocaleString()],
-        ["Net Worth", Math.round(computed.netWorth).toLocaleString()],
-        ["Zakatable Base", Math.round(computed.netZakatableAfterDebts).toLocaleString()],
-        ["Zakat Due (2.5%)", Math.round(computed.totalZakat).toLocaleString()],
-      ],
-      headStyles: { fillColor: [200, 168, 75], textColor: [13, 17, 23] },
-      styles: { fontSize: 10, cellPadding: 6 },
-      alternateRowStyles: { fillColor: [247, 248, 250] },
-      theme: "striped",
-      margin: { left: marginX, right: marginX },
-    });
+    const summaryCards = [
+      { label: tr("إجمالي الأصول", "Total Assets"), value: fmt(Math.round(computed.totalAssets)), color: "#4ECDC4" },
+      { label: tr("إجمالي الالتزامات", "Total Liabilities"), value: fmt(Math.round(computed.totalLiabilities)), color: "#F85149" },
+      { label: tr("صافي الثروة", "Net Worth"), value: fmt(Math.round(computed.netWorth)), color: "#6BCB77" },
+      { label: tr("الزكاة المستحقة", "Zakat Due"), value: fmt(Math.round(computed.totalZakat)), color: "#FFD93D" },
+    ];
 
-    autoTable(doc, {
-      startY: doc.lastAutoTable.finalY + 16,
-      head: [["#", "Asset", "Category", "Currency", "Original", "Value EGP", "Zakat Due EGP"]],
-      body: computed.assetsWithEGP.map((asset, index) => [
-        index + 1,
-        toPdfSafeText(asset.nameEn || asset.name, `Asset ${index + 1}`),
-        toPdfSafeText(CATEGORY_LABELS[asset.category]?.en || asset.category, "Category"),
-        asset.currency,
-        Math.round(asset.value).toLocaleString(),
-        Math.round(asset.valueEGP).toLocaleString(),
-        Math.round(asset.zakatDueEGP).toLocaleString(),
-      ]),
-      headStyles: { fillColor: [78, 205, 196], textColor: [13, 17, 23] },
-      styles: { fontSize: 9, cellPadding: 5 },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
-      theme: "grid",
-      margin: { left: marginX, right: marginX },
-    });
+    const topCategories = [...computed.pieData]
+      .sort((a, b) => Number(b.value || 0) - Number(a.value || 0))
+      .slice(0, 8);
+    const topCategoryTotal = topCategories.reduce((sum, item) => sum + Number(item.value || 0), 0) || 1;
+    const maxCompare = Math.max(Number(computed.totalAssets || 0), Number(computed.totalLiabilities || 0), Number(computed.netWorth || 0), 1);
 
-    autoTable(doc, {
-      startY: doc.lastAutoTable.finalY + 16,
-      head: [["Currency", "Rate to EGP"]],
-      body: Object.keys(exchange).map((code) => [code, Number(exchange[code]).toFixed(4)]),
-      headStyles: { fillColor: [107, 203, 119], textColor: [13, 17, 23] },
-      styles: { fontSize: 9, cellPadding: 5 },
-      theme: "striped",
-      margin: { left: marginX, right: marginX },
-    });
+    reportRoot.innerHTML = `
+      <div style="border:1px solid #1e293b;border-radius:14px;padding:18px 20px;background:#111827;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;">
+          <div>
+            <div style="font-size:24px;font-weight:800;color:#facc15;">${escapeHtml(tr("تقرير الثروة والزكاة", "Wealth & Zakat Report"))}</div>
+            <div style="font-size:12px;color:#94a3b8;margin-top:6px;">${escapeHtml(tr("تقرير تاريخي يتضمن لوحة مرئية + تفاصيل الأصول", "Historical report with visual dashboard + asset details"))}</div>
+          </div>
+          <div style="font-size:12px;color:#94a3b8;text-align:${isRtl ? "left" : "right"};line-height:1.7;">
+            <div>${escapeHtml(tr("تاريخ الإنشاء", "Generated"))}: ${escapeHtml(now.toLocaleString())}</div>
+            <div>${escapeHtml(tr("آخر تحديث للأسعار", "Rates Updated"))}: ${escapeHtml(ratesLastUpdated || "N/A")}</div>
+            <div>${escapeHtml(tr("سنة اللقطة", "Snapshot Year"))}: ${escapeHtml(String(year))}</div>
+          </div>
+        </div>
+      </div>
 
-    doc.save(`wealth-zakat-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}.pdf`);
-    setAppNotice(t.exportPdfDone);
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:14px;">
+        ${summaryCards.map((card) => `
+          <div style="border:1px solid #1f2937;border-radius:12px;background:#0b1220;padding:14px;">
+            <div style="font-size:12px;color:#94a3b8;margin-bottom:6px;">${escapeHtml(card.label)}</div>
+            <div style="font-size:22px;font-weight:800;color:${card.color};">${escapeHtml(card.value)}</div>
+            <div style="font-size:11px;color:#94a3b8;">${escapeHtml(tr("جنيه مصري", "EGP"))}</div>
+          </div>
+        `).join("")}
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+        <div style="border:1px solid #1f2937;border-radius:12px;background:#0b1220;padding:14px;">
+          <div style="font-size:14px;font-weight:700;margin-bottom:10px;">${escapeHtml(tr("توزيع الأصول حسب الفئة", "Asset Allocation by Category"))}</div>
+          ${topCategories.map((item) => {
+            const categoryLabel = getCategoryLabel(item.name);
+            const pct = Math.round((Number(item.value || 0) / topCategoryTotal) * 100);
+            const color = CATEGORY_COLORS[item.name] || "#8B949E";
+            return `
+              <div style="margin-bottom:8px;">
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:#cbd5e1;margin-bottom:4px;">
+                  <span>${escapeHtml(categoryLabel)}</span><span>${escapeHtml(String(pct))}%</span>
+                </div>
+                <div style="height:8px;border-radius:999px;background:#1f2937;overflow:hidden;">
+                  <div style="height:100%;width:${Math.max(3, pct)}%;background:${color};"></div>
+                </div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+
+        <div style="border:1px solid #1f2937;border-radius:12px;background:#0b1220;padding:14px;">
+          <div style="font-size:14px;font-weight:700;margin-bottom:10px;">${escapeHtml(tr("الأصول مقابل الالتزامات وصافي الثروة", "Assets vs Liabilities vs Net Worth"))}</div>
+          ${[
+            { label: tr("الأصول", "Assets"), value: Number(computed.totalAssets || 0), color: "#4ECDC4" },
+            { label: tr("الالتزامات", "Liabilities"), value: Number(computed.totalLiabilities || 0), color: "#F85149" },
+            { label: tr("صافي الثروة", "Net Worth"), value: Number(computed.netWorth || 0), color: "#6BCB77" },
+          ].map((item) => {
+            const pct = Math.round((item.value / maxCompare) * 100);
+            return `
+              <div style="margin-bottom:12px;">
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:#cbd5e1;margin-bottom:4px;">
+                  <span>${escapeHtml(item.label)}</span><span>${escapeHtml(fmt(Math.round(item.value)))}</span>
+                </div>
+                <div style="height:12px;border-radius:999px;background:#1f2937;overflow:hidden;">
+                  <div style="height:100%;width:${Math.max(3, pct)}%;background:${item.color};"></div>
+                </div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      </div>
+
+      <div style="border:1px solid #1f2937;border-radius:12px;background:#0b1220;padding:14px;margin-top:12px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:10px;">${escapeHtml(tr("تفاصيل الأصول", "Asset Details"))}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead>
+            <tr>
+              <th style="border-bottom:1px solid #334155;padding:8px;text-align:${isRtl ? "right" : "left"};">#</th>
+              <th style="border-bottom:1px solid #334155;padding:8px;text-align:${isRtl ? "right" : "left"};">${escapeHtml(tr("الأصل", "Asset"))}</th>
+              <th style="border-bottom:1px solid #334155;padding:8px;text-align:${isRtl ? "right" : "left"};">${escapeHtml(tr("الفئة", "Category"))}</th>
+              <th style="border-bottom:1px solid #334155;padding:8px;text-align:${isRtl ? "right" : "left"};">${escapeHtml(tr("العملة", "Currency"))}</th>
+              <th style="border-bottom:1px solid #334155;padding:8px;text-align:${isRtl ? "right" : "left"};">${escapeHtml(tr("القيمة بالجنيه", "Value EGP"))}</th>
+              <th style="border-bottom:1px solid #334155;padding:8px;text-align:${isRtl ? "right" : "left"};">${escapeHtml(tr("ملاحظات", "Notes"))}</th>
+              <th style="border-bottom:1px solid #334155;padding:8px;text-align:${isRtl ? "right" : "left"};">${escapeHtml(tr("زكاة", "Zakat"))}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${computed.assetsWithEGP.map((asset, index) => `
+              <tr>
+                <td style="border-bottom:1px solid #1f2937;padding:8px;vertical-align:top;">${index + 1}</td>
+                <td style="border-bottom:1px solid #1f2937;padding:8px;vertical-align:top;">${escapeHtml(getAssetName(asset))}</td>
+                <td style="border-bottom:1px solid #1f2937;padding:8px;vertical-align:top;">${escapeHtml(getCategoryLabel(asset.category))}</td>
+                <td style="border-bottom:1px solid #1f2937;padding:8px;vertical-align:top;">${escapeHtml(asset.currency)}</td>
+                <td style="border-bottom:1px solid #1f2937;padding:8px;vertical-align:top;">${escapeHtml(fmt(Math.round(asset.valueEGP)))}</td>
+                <td style="border-bottom:1px solid #1f2937;padding:8px;vertical-align:top;max-width:300px;word-break:break-word;">${escapeHtml(getAssetNotes(asset) || "-")}</td>
+                <td style="border-bottom:1px solid #1f2937;padding:8px;vertical-align:top;">${asset.effectiveZakatable ? escapeHtml(tr("خاضع", "Yes")) : escapeHtml(tr("غير خاضع", "No"))}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    document.body.appendChild(reportRoot);
+
+    try {
+      if (document.fonts?.ready) await document.fonts.ready;
+
+      const canvas = await html2canvas(reportRoot, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#0f172a",
+      });
+
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 16;
+      const usableWidth = pageWidth - margin * 2;
+      const usableHeight = pageHeight - margin * 2;
+      const imgWidth = usableWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const imageData = canvas.toDataURL("image/png");
+
+      let renderedHeight = 0;
+      let pageIndex = 0;
+      while (renderedHeight < imgHeight) {
+        if (pageIndex > 0) doc.addPage();
+        const y = margin - renderedHeight;
+        doc.addImage(imageData, "PNG", margin, y, imgWidth, imgHeight, undefined, "FAST");
+        renderedHeight += usableHeight;
+        pageIndex += 1;
+      }
+
+      doc.save(`wealth-zakat-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}.pdf`);
+      setAppNotice(t.exportPdfDone);
+    } catch {
+      setAppNotice(tr("تعذّر تصدير PDF. حاول مرة أخرى.", "PDF export failed. Please try again."));
+    } finally {
+      reportRoot.remove();
+    }
   };
 
   const addDebt = () => {
