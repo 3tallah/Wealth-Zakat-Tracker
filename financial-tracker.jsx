@@ -681,7 +681,7 @@ export default function App() {
         </div>
       )}
 
-      <div style={{ background: "linear-gradient(180deg, #0d2b22 0%, #16382d 100%)", borderBottom: "1px solid #37564a", padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50 }}>
+      <div style={{ background: "linear-gradient(180deg, #0d2b22 0%, #16382d 100%)", borderBottom: "1px solid #37564a", padding: "16px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "fixed", top: 0, left: 0, right: 0, width: "100%", zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{ width: 40, height: 40, background: "#3f3f12", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>💰</div>
           <div>
@@ -711,7 +711,7 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{ padding: "32px", maxWidth: 1400, margin: "0 auto", position: "relative", zIndex: 2 }}>
+      <div style={{ padding: "112px 32px 32px", maxWidth: 1400, margin: "0 auto", position: "relative", zIndex: 2 }}>
         {activeTab === "about" && aboutSection}
         {activeTab === "dashboard" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
