@@ -90,6 +90,20 @@ const CONTRIBUTION_URL = "https://github.com/3tallah/Wealth-Zakat-Tracker.git";
 const ISSUES_URL = "https://github.com/3tallah/Wealth-Zakat-Tracker/issues";
 const SITE_URL = "https://zakat.mahmoudatallah.com";
 
+const isPlainObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
+const readSessionState = () => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return isPlainObject(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
 const SEO_BY_TAB = {
   dashboard: {
     path: "/",
@@ -162,20 +176,32 @@ const renderPieLabelLine = ({ points, percent }) => {
 };
 
 export default function App() {
-  const [lang, setLang] = useState("ar");
-  const [assets, setAssets] = useState(INITIAL_ASSETS_2026);
-  const [debts, setDebts] = useState(INITIAL_DEBTS);
-  const [exchange, setExchange] = useState(INITIAL_EXCHANGE);
-  const [yearlySnapshots, setYearlySnapshots] = useState([]);
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const initialSession = useMemo(() => readSessionState(), []);
+
+  const [lang, setLang] = useState(() => (initialSession?.lang === "en" ? "en" : "ar"));
+  const [assets, setAssets] = useState(() => (Array.isArray(initialSession?.assets) ? initialSession.assets : INITIAL_ASSETS_2026));
+  const [debts, setDebts] = useState(() => (Array.isArray(initialSession?.debts) ? initialSession.debts : INITIAL_DEBTS));
+  const [exchange, setExchange] = useState(() => {
+    const sessionExchange = initialSession?.exchange;
+    if (!isPlainObject(sessionExchange)) return INITIAL_EXCHANGE;
+    return { ...INITIAL_EXCHANGE, ...sessionExchange };
+  });
+  const [yearlySnapshots, setYearlySnapshots] = useState(() => (Array.isArray(initialSession?.yearlySnapshots) ? initialSession.yearlySnapshots : []));
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = initialSession?.activeTab;
+    return tab && SEO_BY_TAB[tab] ? tab : "dashboard";
+  });
   const [editingAsset, setEditingAsset] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [year, setYear] = useState(2026);
+  const [year, setYear] = useState(() => (Number.isFinite(Number(initialSession?.year)) ? Number(initialSession.year) : 2026));
   const [rateStatus, setRateStatus] = useState(TEXT.ar.rateStatusDefault);
-  const [ratesLastUpdated, setRatesLastUpdated] = useState(null);
+  const [ratesLastUpdated, setRatesLastUpdated] = useState(() => initialSession?.ratesLastUpdated || null);
   const [isFetchingRates, setIsFetchingRates] = useState(false);
-  const [goldPrice24k, setGoldPrice24k] = useState(0);
-  const [goldLastUpdated, setGoldLastUpdated] = useState(null);
+  const [goldPrice24k, setGoldPrice24k] = useState(() => {
+    const saved = Number(initialSession?.goldPrice24k);
+    return Number.isFinite(saved) && saved >= 0 ? saved : 0;
+  });
+  const [goldLastUpdated, setGoldLastUpdated] = useState(() => initialSession?.goldLastUpdated || null);
   const [goldStatus, setGoldStatus] = useState("idle");
   const [isFetchingGold, setIsFetchingGold] = useState(false);
   const [appNotice, setAppNotice] = useState("");
@@ -220,6 +246,27 @@ export default function App() {
     document.documentElement.lang = lang;
     document.documentElement.dir = isRtl ? "rtl" : "ltr";
   }, [lang, isRtl]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const nextSession = {
+      lang,
+      assets,
+      debts,
+      exchange,
+      yearlySnapshots,
+      activeTab,
+      year,
+      ratesLastUpdated,
+      goldPrice24k,
+      goldLastUpdated,
+    };
+    try {
+      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextSession));
+    } catch {
+      // ignore storage failures silently
+    }
+  }, [lang, assets, debts, exchange, yearlySnapshots, activeTab, year, ratesLastUpdated, goldPrice24k, goldLastUpdated]);
 
   useEffect(() => {
     const upsertMeta = (name, content) => {
@@ -410,6 +457,39 @@ export default function App() {
     return () => clearInterval(intervalId);
   }, [fetchGoldPrice]);
 
+  useEffect(() => {
+    setAssets((prevAssets) => {
+      const totalGoldPureWeight24 = prevAssets.reduce((sum, asset) => {
+        if (asset.category !== "معادن ثمينة") return sum;
+        const weight18 = Math.max(Number(asset.goldWeight18) || 0, 0);
+        const weight21 = Math.max(Number(asset.goldWeight21) || 0, 0);
+        const weight24 = Math.max(Number(asset.goldWeight24) || 0, 0);
+        return sum + (((weight18 * 18) + (weight21 * 21) + (weight24 * 24)) / 24);
+      }, 0);
+
+      const hasAnyRecordedGoldWeight = prevAssets.some((asset) => {
+        if (asset.category !== "معادن ثمينة") return false;
+        const weight18 = Math.max(Number(asset.goldWeight18) || 0, 0);
+        const weight21 = Math.max(Number(asset.goldWeight21) || 0, 0);
+        const weight24 = Math.max(Number(asset.goldWeight24) || 0, 0);
+        return weight18 > 0 || weight21 > 0 || weight24 > 0;
+      });
+
+      if (!hasAnyRecordedGoldWeight) return prevAssets;
+
+      const nextGoldZakatable = totalGoldPureWeight24 >= 85;
+      let changed = false;
+      const nextAssets = prevAssets.map((asset) => {
+        if (asset.category !== "معادن ثمينة") return asset;
+        if (Boolean(asset.zakatable) === nextGoldZakatable) return asset;
+        changed = true;
+        return { ...asset, zakatable: nextGoldZakatable };
+      });
+
+      return changed ? nextAssets : prevAssets;
+    });
+  }, [assets]);
+
   const toEGP = (val, curr) => {
     if (curr === "EGP") return val;
     const rate = exchange[curr];
@@ -418,12 +498,38 @@ export default function App() {
   };
 
   const computed = useMemo(() => {
-    const assetsWithEGP = assets.map((a) => ({
-      ...a,
-      valueEGP: toEGP(a.value, a.currency),
-      zakatableValueEGP: a.zakatable ? toEGP(a.value, a.currency) * (a.zakatBasis || 1) : 0,
-      zakatDueEGP: a.zakatable ? toEGP(a.value, a.currency) * (a.zakatBasis || 1) * 0.025 : 0,
-    }));
+    const goldWeightMeta = assets.map((a) => {
+      const goldWeight18 = Math.max(Number(a.goldWeight18) || 0, 0);
+      const goldWeight21 = Math.max(Number(a.goldWeight21) || 0, 0);
+      const goldWeight24 = Math.max(Number(a.goldWeight24) || 0, 0);
+      const pureGoldWeight24 = ((goldWeight18 * 18) + (goldWeight21 * 21) + (goldWeight24 * 24)) / 24;
+      const hasRecordedGoldWeight = goldWeight18 > 0 || goldWeight21 > 0 || goldWeight24 > 0;
+      return { pureGoldWeight24, hasRecordedGoldWeight };
+    });
+
+    const totalPureGoldWeight24 = assets.reduce((sum, asset, index) => {
+      if (asset.category !== "معادن ثمينة") return sum;
+      return sum + goldWeightMeta[index].pureGoldWeight24;
+    }, 0);
+    const hasAnyRecordedGoldWeight = assets.some((asset, index) => asset.category === "معادن ثمينة" && goldWeightMeta[index].hasRecordedGoldWeight);
+    const meetsGoldNisabByTotal = totalPureGoldWeight24 >= 85;
+
+    const assetsWithEGP = assets.map((a, index) => {
+      const valueEGP = toEGP(a.value, a.currency);
+      const isGoldAsset = a.category === "معادن ثمينة";
+      const meetsGoldNisab = !isGoldAsset || !hasAnyRecordedGoldWeight || meetsGoldNisabByTotal;
+      const effectiveZakatable = isGoldAsset
+        ? (!hasAnyRecordedGoldWeight ? Boolean(a.zakatable) : meetsGoldNisab)
+        : Boolean(a.zakatable);
+
+      return {
+        ...a,
+        effectiveZakatable,
+        valueEGP,
+        zakatableValueEGP: effectiveZakatable ? valueEGP * (a.zakatBasis || 1) : 0,
+        zakatDueEGP: effectiveZakatable ? valueEGP * (a.zakatBasis || 1) * 0.025 : 0,
+      };
+    });
 
     const totalAssets = assetsWithEGP.reduce((s, a) => s + a.valueEGP, 0);
     const totalDebts = debts.reduce((s, d) => s + (d || 0), 0);
@@ -491,7 +597,7 @@ export default function App() {
       a.currency,
       a.value,
       Math.round(a.valueEGP),
-      a.zakatable ? "Yes" : "No",
+      a.effectiveZakatable ? "Yes" : "No",
       Math.round((a.zakatBasis || 1) * 100),
       Math.round(a.zakatDueEGP),
     ]);
@@ -674,12 +780,16 @@ export default function App() {
         <h2 style={{ fontWeight: 900, fontSize: 22, marginBottom: 10 }}>{tr("كيفية استخدام حاسبة الزكاة", "How to Use the Zakat Calculator")}</h2>
         <div style={{ color: "#C9D1D9", lineHeight: 1.9, fontSize: 14 }}>
           {tr(
-            "اتبع هذه الخطوات لحساب الزكاة بدقة: أضف الأصول، ثم أضف الديون، ثم راجع نتيجة وعاء الزكاة والزكاة المستحقة (2.5%).",
-            "Follow these steps for accurate results: add assets, enter debts, then review the zakah base and final zakah due (2.5%)."
+            "اتبع هذه الخطوات لحساب الزكاة بدقة: أدخل الأصول، أضف الديون المستحقة، ثم راجع صافي الوعاء والزكاة الواجبة (2.5%).",
+            "Follow these steps for accurate results: enter assets, add eligible debts, then review net zakah base and final zakah due (2.5%)."
           )}
         </div>
         <div className="grid3" style={{ marginTop: 16 }}>
-          {[tr("1) أدخل الأصول النقدية والذهب والاستثمارات", "1) Enter cash, gold, and investments"), tr("2) أضف الديون المستحقة للخصم من الوعاء", "2) Add eligible debts to deduct from zakah base"), tr("3) انتقل إلى صفحة الزكاة للتفاصيل والتصدير", "3) Open Zakah tab for detailed calculation and export")].map((step) => (
+          {[
+            tr("1) أدخل الأصول (نقد، ذهب، استثمارات...) مع العملة الصحيحة", "1) Add assets (cash, gold, investments...) with the correct currency"),
+            tr("2) في الذهب: الحاسبة تحوّل إلى صافي 24 وتطبّق النصاب تلقائيًا (85 جم)", "2) For gold: the calculator normalizes to pure 24K and applies nisab automatically (85g)"),
+            tr("3) أضف الديون المستحقة ثم راجع صفحة الزكاة للتفاصيل والتصدير", "3) Add eligible debts, then open the Zakah tab for details and export")
+          ].map((step) => (
             <div key={step} className="stat-card" style={{ fontSize: 13, color: "#E6EDF3", lineHeight: 1.7 }}>{step}</div>
           ))}
         </div>
@@ -698,14 +808,20 @@ export default function App() {
             {
               qAr: "كيف يؤثر عيار الذهب على الزكاة؟",
               qEn: "How does gold karat affect zakah?",
-              aAr: "يتم توحيد قيمة الذهب على أساس السعر الحالي للذهب عيار 24 لتحديد النصاب وقيمة الزكاة بشكل أدق.",
-              aEn: "Gold is normalized using current 24K price to estimate nisab and zakah amount more accurately.",
+              aAr: "تقوم الحاسبة بتحويل الذهب إلى وزن صافي عيار 24. إذا كان أقل من 85 جم فلا يُحسب ضمن الأصول الخاضعة للزكاة.",
+              aEn: "The calculator converts gold to pure 24K equivalent. If it is below 85g, it is excluded from zakatable assets.",
             },
             {
               qAr: "هل يمكنني تتبع زكاتي سنة بعد سنة؟",
               qEn: "Can I track my zakah year over year?",
               aAr: "نعم، استخدم حفظ اللقطة السنوية لمتابعة تطور الأصول والالتزامات والزكاة المستحقة عبر السنوات.",
               aEn: "Yes, use yearly snapshots to track assets, liabilities, and zakah due over time.",
+            },
+            {
+              qAr: "هل يمكنني تعديل خيار خاضع للزكاة للذهب يدويًا؟",
+              qEn: "Can I manually toggle Zakat Eligible for gold?",
+              aAr: "لا، يتم تحديده تلقائيًا حسب بلوغ نصاب الذهب (85 جم صافي 24). للأصول الأخرى يمكنك التحكم يدويًا.",
+              aEn: "No. It is set automatically based on gold nisab (85g pure 24K). For other assets, manual control is available.",
             },
           ].map((item) => (
             <div key={item.qEn} className="stat-card">
@@ -1116,7 +1232,7 @@ export default function App() {
                         <td><span style={{ padding: "3px 10px", borderRadius: 20, background: CATEGORY_COLORS[a.category] + "22", color: CATEGORY_COLORS[a.category] || "#8B949E", fontSize: 12, fontWeight: 600 }}>{getCategoryLabel(a.category)}</span></td>
                         <td style={{ fontFamily: "monospace", fontSize: 13 }}>{fmt(a.value)} {a.currency}</td>
                         <td style={{ color: "#4ECDC4", fontWeight: 700 }}>{fmt(Math.round(a.valueEGP))}</td>
-                        <td><span className={`tag ${a.zakatable ? "tag-yes" : "tag-no"}`}>{a.zakatable ? tr("خاضع", "Eligible") : tr("غير خاضع", "Not Eligible")}</span></td>
+                        <td><span className={`tag ${a.effectiveZakatable ? "tag-yes" : "tag-no"}`}>{a.effectiveZakatable ? tr("خاضع", "Eligible") : tr("غير خاضع", "Not Eligible")}</span></td>
                         <td style={{ fontSize: 12, color: "#8B949E", maxWidth: 160 }}>{getAssetNotes(a)}</td>
                         <td><div style={{ display: "flex", gap: 6 }}><button className="btn btn-ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setEditingAsset(a)}>{tr("تعديل", "Edit")}</button><button className="btn btn-danger" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setAssets((prev) => prev.filter((x) => x.id !== a.id))}>{tr("حذف", "Delete")}</button></div></td>
                       </tr>
@@ -1152,7 +1268,7 @@ export default function App() {
                   <tr><th>{tr("الأصل", "Asset")}</th><th>{tr("الفئة", "Category")}</th><th>{tr("القيمة (ج.م)", "Value (EGP)")}</th><th>{tr("نسبة الوعاء", "Zakat Basis %")}</th><th>{tr("وعاء الزكاة (ج.م)", "Zakat Base (EGP)")}</th><th>{tr("الزكاة (ج.م)", "Zakat (EGP)")}</th></tr>
                 </thead>
                 <tbody>
-                  {computed.assetsWithEGP.filter((a) => a.zakatable).map((a) => (
+                  {computed.assetsWithEGP.filter((a) => a.effectiveZakatable).map((a) => (
                     <tr key={a.id}>
                       <td style={{ fontWeight: 600 }}>{getAssetName(a)}</td>
                       <td><span style={{ padding: "3px 10px", borderRadius: 20, background: CATEGORY_COLORS[a.category] + "22", color: CATEGORY_COLORS[a.category] || "#8B949E", fontSize: 12 }}>{getCategoryLabel(a.category)}</span></td>
@@ -1227,7 +1343,7 @@ export default function App() {
         <div className="modal-overlay" onClick={() => setEditingAsset(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 20 }}>{tr("تعديل", "Edit")}: {getAssetName(editingAsset)}</div>
-            <AssetForm lang={lang} asset={editingAsset} goldPrice24k={goldPrice24k} onSave={(updated) => { setAssets((prev) => prev.map((a) => a.id === updated.id ? updated : a)); setEditingAsset(null); }} onCancel={() => setEditingAsset(null)} />
+            <AssetForm lang={lang} asset={editingAsset} allAssets={assets} goldPrice24k={goldPrice24k} onSave={(updated) => { setAssets((prev) => prev.map((a) => a.id === updated.id ? updated : a)); setEditingAsset(null); }} onCancel={() => setEditingAsset(null)} />
           </div>
         </div>
       )}
@@ -1236,7 +1352,7 @@ export default function App() {
         <div className="modal-overlay" onClick={() => setShowAddForm(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 20 }}>{tr("إضافة أصل جديد", "Add New Asset")}</div>
-            <AssetForm lang={lang} asset={{ id: Date.now(), name: "", nameEn: "", category: "نقد وسيولة", description: "", value: 0, currency: "EGP", zakatable: true, notes: "", zakatBasis: 1 }} goldPrice24k={goldPrice24k} isNew onSave={(a) => { setAssets((prev) => [...prev, a]); setShowAddForm(false); }} onCancel={() => setShowAddForm(false)} />
+            <AssetForm lang={lang} asset={{ id: Date.now(), name: "", nameEn: "", category: "نقد وسيولة", description: "", value: 0, currency: "EGP", zakatable: true, notes: "", zakatBasis: 1 }} allAssets={assets} goldPrice24k={goldPrice24k} isNew onSave={(a) => { setAssets((prev) => [...prev, a]); setShowAddForm(false); }} onCancel={() => setShowAddForm(false)} />
           </div>
         </div>
       )}
@@ -1244,7 +1360,7 @@ export default function App() {
   );
 }
 
-function AssetForm({ lang, asset, goldPrice24k, isNew, onSave, onCancel }) {
+function AssetForm({ lang, asset, allAssets = [], goldPrice24k, isNew, onSave, onCancel }) {
   const [form, setForm] = useState({ ...asset });
   const tr = (ar, en) => (lang === "ar" ? ar : en);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -1259,7 +1375,15 @@ function AssetForm({ lang, asset, goldPrice24k, isNew, onSave, onCancel }) {
   const goldWeight21 = toPositiveNumber(form.goldWeight21);
   const goldWeight24 = toPositiveNumber(form.goldWeight24);
   const pureGoldWeight24 = Number((((goldWeight18 * 18) + (goldWeight21 * 21) + (goldWeight24 * 24)) / 24).toFixed(4));
-  const meetsNisab = pureGoldWeight24 >= 85;
+  const otherGoldPureWeight24 = allAssets.reduce((sum, item) => {
+    if (item.id === form.id || item.category !== "معادن ثمينة") return sum;
+    const itemWeight18 = toPositiveNumber(item.goldWeight18);
+    const itemWeight21 = toPositiveNumber(item.goldWeight21);
+    const itemWeight24 = toPositiveNumber(item.goldWeight24);
+    return sum + (((itemWeight18 * 18) + (itemWeight21 * 21) + (itemWeight24 * 24)) / 24);
+  }, 0);
+  const totalGoldPureWeight24 = Number((otherGoldPureWeight24 + pureGoldWeight24).toFixed(4));
+  const meetsNisab = totalGoldPureWeight24 >= 85;
   const formatSmall = (n) => new Intl.NumberFormat(lang === "ar" ? "ar-EG" : "en-US", { maximumFractionDigits: 2 }).format(n);
 
   useEffect(() => {
@@ -1287,6 +1411,15 @@ function AssetForm({ lang, asset, goldPrice24k, isNew, onSave, onCancel }) {
       return { ...prev, goldWeight18: "", goldWeight21: "", goldWeight24: Number((inferred / gramPrice).toFixed(2)), currency: "EGP" };
     });
   }, [isGoldCategory, goldPrice24k]);
+
+  useEffect(() => {
+    if (!isGoldCategory) return;
+    setForm((prev) => {
+      const nextZakatable = meetsNisab;
+      if (prev.zakatable === nextZakatable) return prev;
+      return { ...prev, zakatable: nextZakatable };
+    });
+  }, [isGoldCategory, meetsNisab]);
 
   const updateCategory = (nextCategory) => {
     setForm((prev) => {
@@ -1366,8 +1499,8 @@ function AssetForm({ lang, asset, goldPrice24k, isNew, onSave, onCancel }) {
         <div style={{ fontSize: 12, color: Number(goldPrice24k) > 0 ? "#8B949E" : "#F85149", lineHeight: 1.7 }}>
           {Number(goldPrice24k) > 0
             ? tr(
-                `الوزن الخالص (24): ${formatSmall(pureGoldWeight24)} جم — ${meetsNisab ? "بلغ النصاب (85 جم)" : "لم يبلغ النصاب (85 جم)"}. القيمة تُحسب تلقائيًا بسعر الجرام الحالي: ${new Intl.NumberFormat("ar-EG", { maximumFractionDigits: 2 }).format(goldPrice24k)} ج.م.`,
-                `Pure 24K equivalent: ${formatSmall(pureGoldWeight24)} g — ${meetsNisab ? "Nisab reached (85g)" : "Below nisab (85g)"}. Value is auto-calculated using current gram price: ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(goldPrice24k)} EGP.`
+                `وزن هذا الأصل (صافي 24): ${formatSmall(pureGoldWeight24)} جم — إجمالي الذهب (صافي 24): ${formatSmall(totalGoldPureWeight24)} جم — ${meetsNisab ? "بلغ النصاب (85 جم)" : "لم يبلغ النصاب (85 جم)"}. القيمة تُحسب تلقائيًا بسعر الجرام الحالي: ${new Intl.NumberFormat("ar-EG", { maximumFractionDigits: 2 }).format(goldPrice24k)} ج.م.`,
+                `This asset pure 24K equivalent: ${formatSmall(pureGoldWeight24)} g — Total gold pure 24K equivalent: ${formatSmall(totalGoldPureWeight24)} g — ${meetsNisab ? "Nisab reached (85g)" : "Below nisab (85g)"}. Value is auto-calculated using current gram price: ${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(goldPrice24k)} EGP.`
               )
             : tr("لا يوجد سعر ذهب متاح الآن من API. حدّث السعر أولًا من لوحة القيادة.", "No gold price available from API. Refresh it first from Dashboard.")}
           <div style={{ marginTop: 6 }}>
@@ -1398,7 +1531,20 @@ function AssetForm({ lang, asset, goldPrice24k, isNew, onSave, onCancel }) {
         </div>
       )}
       <div className="grid2">
-        <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}><input type="checkbox" checked={form.zakatable} onChange={(e) => set("zakatable", e.target.checked)} style={{ width: "auto", accentColor: "#FFD93D" }} /><span style={{ fontSize: 14 }}>{tr("خاضع للزكاة", "Zakat Eligible")}</span></label>
+        <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: isGoldCategory ? "default" : "pointer" }}>
+          <input
+            type="checkbox"
+            checked={isGoldCategory ? meetsNisab : form.zakatable}
+            onChange={(e) => set("zakatable", e.target.checked)}
+            disabled={isGoldCategory}
+            style={{ width: "auto", accentColor: "#FFD93D" }}
+          />
+          <span style={{ fontSize: 14 }}>
+            {isGoldCategory
+              ? tr("الخضوع للزكاة تلقائي حسب بلوغ النصاب (85 جم صافي 24)", "Eligibility is automatic based on nisab (85g pure 24K)")
+              : tr("خاضع للزكاة", "Zakat Eligible")}
+          </span>
+        </label>
       </div>
       <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 6 }}>{tr("ملاحظات", "Notes")}</label><input value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
       <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
