@@ -23,6 +23,7 @@ const TEXT = {
     title: "حساب الثروة والزكاة",
     tabs: {
       about: "عن الزكاة",
+      guide: "دليل الاستخدام",
       dashboard: "لوحة القيادة",
       assets: "الأصول",
       zakat: "الزكاة",
@@ -45,6 +46,7 @@ const TEXT = {
       dashboard: "Dashboard",
       assets: "Assets",
       about: "About Zakah",
+      guide: "How To Use",
       zakat: "Zakat",
       history: "History",
     },
@@ -86,6 +88,58 @@ const CATEGORY_LABELS = {
 const SESSION_STORAGE_KEY = "zakat-tracker:session:v1";
 const CONTRIBUTION_URL = "https://github.com/3tallah/Wealth-Zakat-Tracker.git";
 const ISSUES_URL = "https://github.com/3tallah/Wealth-Zakat-Tracker/issues";
+const SITE_URL = "https://zakat.mahmoudatallah.com";
+
+const SEO_BY_TAB = {
+  dashboard: {
+    path: "/",
+    title: "Zakat & Net Worth Calculator – حساب الزكاة وصافي الثروة مصر",
+    description: "Bilingual (Arabic/English) Zakat & Wealth Calculator for Egyptians. Track assets, debts, calculate zakah automatically with live gold & currency rates, and generate reports.",
+    keywords: "zakat calculator Egypt, حساب الزكاة مصر, wealth tracker Egypt, calculate zakah, Egyptian financial calculator",
+    headingAr: "حساب الزكاة وصافي الثروة مصر",
+    headingEn: "Zakat & Net Worth Calculator Egypt",
+  },
+  assets: {
+    path: "/assets",
+    title: "Track Your Assets – أصولك المالية",
+    description: "Add and manage your assets in EGP or foreign currencies. Supports live gold price and exchange rates.",
+    keywords: "track assets Egypt, Egyptian asset management, gold value calculator, currency converter Egypt",
+    headingAr: "إدارة الأصول المالية وتتبع قيمتها",
+    headingEn: "Track and Manage Financial Assets",
+  },
+  zakat: {
+    path: "/calculate",
+    title: "Zakah Calculation – حساب الزكاة",
+    description: "Automatically calculate zakah based on your net worth, assets, debts, and live gold/currency rates. Accurate and bilingual.",
+    keywords: "calculate zakah Egypt, Zakat calculator Egypt, net worth zakah, gold zakah calculator",
+    headingAr: "حساب الزكاة بناءً على الأصول والديون",
+    headingEn: "Calculate Zakah from Assets and Debts",
+  },
+  history: {
+    path: "/reports",
+    title: "Export Reports – تصدير التقارير",
+    description: "Download zakah and wealth reports in Excel or PDF for personal tracking or sharing.",
+    keywords: "zakah report Egypt, export zakah calculation, PDF zakah report",
+    headingAr: "تصدير تقارير الزكاة والثروة",
+    headingEn: "Export Zakah and Wealth Reports",
+  },
+  about: {
+    path: "/",
+    title: "Zakat & Net Worth Calculator – حساب الزكاة وصافي الثروة مصر",
+    description: "Bilingual (Arabic/English) Zakat & Wealth Calculator for Egyptians. Track assets, debts, calculate zakah automatically with live gold & currency rates, and generate reports.",
+    keywords: "zakat calculator Egypt, حساب الزكاة مصر, wealth tracker Egypt, calculate zakah, Egyptian financial calculator",
+    headingAr: "عن الزكاة وحساب الزكاة في مصر",
+    headingEn: "About Zakah and Calculation in Egypt",
+  },
+  guide: {
+    path: "/guide",
+    title: "How to Use Zakat Calculator – كيفية استخدام حاسبة الزكاة",
+    description: "Step-by-step guide to calculate zakah including debts, gold, and investments for Egyptians in Arabic and English.",
+    keywords: "Egyptian Zakat calculator, حاسبة الزكاة للمصريين, calculate zakah online, حساب الزكاة أونلاين, how to calculate zakah for Egyptians living abroad, calculate zakah including debts and gold, bilingual Arabic English zakah calculator",
+    headingAr: "كيفية استخدام حاسبة الزكاة للمصريين",
+    headingEn: "How to Use Egyptian Zakat Calculator",
+  },
+};
 
 const RADIAN = Math.PI / 180;
 
@@ -130,6 +184,7 @@ export default function App() {
   const t = TEXT[lang];
   const isRtl = lang === "ar";
   const tr = (ar, en) => (lang === "ar" ? ar : en);
+  const seoMeta = SEO_BY_TAB[activeTab] || SEO_BY_TAB.dashboard;
   const fmt = (n) => new Intl.NumberFormat(lang === "ar" ? "ar-EG" : "en-US", { maximumFractionDigits: 0 }).format(n);
   const parseLocalizedNumber = (raw) => {
     if (raw === null || raw === undefined) return NaN;
@@ -165,6 +220,58 @@ export default function App() {
     document.documentElement.lang = lang;
     document.documentElement.dir = isRtl ? "rtl" : "ltr";
   }, [lang, isRtl]);
+
+  useEffect(() => {
+    const upsertMeta = (name, content) => {
+      let tag = document.head.querySelector(`meta[name="${name}"]`);
+      if (!tag) {
+        tag = document.createElement("meta");
+        tag.setAttribute("name", name);
+        document.head.appendChild(tag);
+      }
+      tag.setAttribute("content", content);
+    };
+
+    const upsertCanonical = (href) => {
+      let link = document.head.querySelector("link[rel='canonical']");
+      if (!link) {
+        link = document.createElement("link");
+        link.setAttribute("rel", "canonical");
+        document.head.appendChild(link);
+      }
+      link.setAttribute("href", href);
+    };
+
+    const upsertAlternate = (hrefLang, href) => {
+      let link = document.head.querySelector(`link[rel='alternate'][hreflang='${hrefLang}']`);
+      if (!link) {
+        link = document.createElement("link");
+        link.setAttribute("rel", "alternate");
+        link.setAttribute("hreflang", hrefLang);
+        document.head.appendChild(link);
+      }
+      link.setAttribute("href", href);
+    };
+
+    document.title = seoMeta.title;
+    upsertMeta("description", seoMeta.description);
+    upsertMeta("keywords", seoMeta.keywords);
+    upsertMeta("robots", "index, follow");
+
+    const canonicalUrl = `${SITE_URL}${seoMeta.path}`;
+    upsertCanonical(canonicalUrl);
+    upsertAlternate("en", canonicalUrl);
+    upsertAlternate("ar", canonicalUrl);
+    upsertAlternate("x-default", `${SITE_URL}/`);
+
+    if (typeof window.gtag === "function") {
+      window.gtag("event", "page_view", {
+        page_title: seoMeta.title,
+        page_location: canonicalUrl,
+        page_path: seoMeta.path,
+      });
+    }
+  }, [seoMeta]);
 
   useEffect(() => {
     try {
@@ -561,6 +668,77 @@ export default function App() {
     </div>
   );
 
+  const guideSection = (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div className="card">
+        <h2 style={{ fontWeight: 900, fontSize: 22, marginBottom: 10 }}>{tr("كيفية استخدام حاسبة الزكاة", "How to Use the Zakat Calculator")}</h2>
+        <div style={{ color: "#C9D1D9", lineHeight: 1.9, fontSize: 14 }}>
+          {tr(
+            "اتبع هذه الخطوات لحساب الزكاة بدقة: أضف الأصول، ثم أضف الديون، ثم راجع نتيجة وعاء الزكاة والزكاة المستحقة (2.5%).",
+            "Follow these steps for accurate results: add assets, enter debts, then review the zakah base and final zakah due (2.5%)."
+          )}
+        </div>
+        <div className="grid3" style={{ marginTop: 16 }}>
+          {[tr("1) أدخل الأصول النقدية والذهب والاستثمارات", "1) Enter cash, gold, and investments"), tr("2) أضف الديون المستحقة للخصم من الوعاء", "2) Add eligible debts to deduct from zakah base"), tr("3) انتقل إلى صفحة الزكاة للتفاصيل والتصدير", "3) Open Zakah tab for detailed calculation and export")].map((step) => (
+            <div key={step} className="stat-card" style={{ fontSize: 13, color: "#E6EDF3", lineHeight: 1.7 }}>{step}</div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <h2 style={{ fontWeight: 900, fontSize: 22, marginBottom: 12 }}>{tr("الأسئلة الشائعة", "FAQ")}</h2>
+        <div style={{ display: "grid", gap: 12 }}>
+          {[
+            {
+              qAr: "كيف أحسب الزكاة في مصر؟",
+              qEn: "How to calculate zakah in Egypt?",
+              aAr: "اجمع الأصول الخاضعة للزكاة، ثم اطرح الديون المستحقة، وبعدها احسب 2.5% من الصافي إذا بلغ النصاب.",
+              aEn: "Add zakatable assets, subtract eligible debts, then pay 2.5% of the net amount once nisab is reached.",
+            },
+            {
+              qAr: "كيف يؤثر عيار الذهب على الزكاة؟",
+              qEn: "How does gold karat affect zakah?",
+              aAr: "يتم توحيد قيمة الذهب على أساس السعر الحالي للذهب عيار 24 لتحديد النصاب وقيمة الزكاة بشكل أدق.",
+              aEn: "Gold is normalized using current 24K price to estimate nisab and zakah amount more accurately.",
+            },
+            {
+              qAr: "هل يمكنني تتبع زكاتي سنة بعد سنة؟",
+              qEn: "Can I track my zakah year over year?",
+              aAr: "نعم، استخدم حفظ اللقطة السنوية لمتابعة تطور الأصول والالتزامات والزكاة المستحقة عبر السنوات.",
+              aEn: "Yes, use yearly snapshots to track assets, liabilities, and zakah due over time.",
+            },
+          ].map((item) => (
+            <div key={item.qEn} className="stat-card">
+              <div style={{ fontWeight: 800, color: "#FFD93D", marginBottom: 6 }}>{lang === "ar" ? item.qAr : item.qEn}</div>
+              <div style={{ color: "#C9D1D9", fontSize: 14, lineHeight: 1.8 }}>{lang === "ar" ? item.aAr : item.aEn}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card" style={{ borderColor: "#2A4F41" }}>
+        <h2 style={{ fontWeight: 900, fontSize: 20, marginBottom: 10 }}>{tr("عبارات بحث مستهدفة", "Target Search Phrases")}</h2>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {[
+            "zakat calculator Egypt",
+            "حساب الزكاة مصر",
+            "Egyptian Zakat calculator",
+            "calculate zakah online",
+            "gold zakah calculator Egypt",
+            "net worth tracker Egypt",
+            "wealth tracker online",
+            "zakah for investments",
+            "how to calculate zakah for Egyptians living abroad",
+            "calculate zakah including debts and gold",
+            "bilingual Arabic English zakah calculator",
+          ].map((phrase) => (
+            <span key={phrase} style={{ border: "1px solid #37564a", borderRadius: 999, padding: "6px 10px", fontSize: 12, color: "#D2D9C8", background: "rgba(0,0,0,0.18)" }}>{phrase}</span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
   const footerSection = (
     <footer className="card" style={{ background: "linear-gradient(180deg, #0d2b22 0%, #123429 100%)", borderColor: "#2A4F41", overflow: "hidden" }}>
       <div className="grid3" style={{ gap: 24 }}>
@@ -570,11 +748,21 @@ export default function App() {
             <div style={{ fontSize: 20, color: "#FFD93D", marginBottom: 6 }}>{'"مَا نَقَصَتْ صَدَقَةٌ مِنْ مَالٍ"'}</div>
             <div style={{ color: "#8B949E", fontSize: 12 }}>{tr("حديث شريف", "Prophetic Hadith")}</div>
           </div>
+
+          <div style={{ marginTop: 6, border: "1px solid rgba(200,168,75,0.25)", borderRadius: 12, padding: 12, background: "rgba(0,0,0,0.18)" }}>
+            <div style={{ color: "#C9D1D9", fontSize: 12, lineHeight: 1.7, marginBottom: 8 }}>
+              {tr("هذه الحاسبة وسيلة مساعدة للتقدير، يرجى دائماً مراجعة دار الإفتاء في الحالات المعقدة لضمان صحة الفريضة.", "This calculator is an estimation aid. Please consult Dar Al-Ifta in complex cases to ensure correct obligation.")}
+            </div>
+            <a href="https://dar-alifta.org/ar/fatwa/details/18349" target="_blank" rel="noopener noreferrer" style={{ color: "#FFD93D", fontSize: 13, fontWeight: 700 }}>
+              {tr("تفاصيل النصاب الشرعي بموقع دار الإفتاء", "Nisab details on Dar Al-Ifta website")}
+            </a>
+          </div>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ fontWeight: 800, color: "#E6EDF3" }}>{tr("تبرع الآن", "Donate Now")}</div>
           {[
+            { ar: "بنك الطعام المصري", en: "Egyptian Food Bank", url: "https://www.efb.eg/en" },
             { ar: "بنك الشفاء المصري", en: "Egyptian Cure Bank", url: "https://www.egyptiancurebank.com/ar/donate-now" },
             { ar: "جمعية الأورمان", en: "Orman Association", url: "https://www.dar-alorman.com/donate" },
             { ar: "مؤسسة مجدي يعقوب", en: "Magdi Yacoub Foundation", url: "https://myf-egypt.org/ar/donation/" },
@@ -588,12 +776,22 @@ export default function App() {
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ fontWeight: 800, color: "#E6EDF3" }}>{tr("روابط مفيدة", "Useful Links")}</div>
+          <button
+            className="btn btn-ghost"
+            onClick={() => setActiveTab("guide")}
+            style={{ textAlign: isRtl ? "right" : "left", border: "1px solid rgba(200,168,75,0.25)", borderRadius: 10, padding: "10px 12px", background: "rgba(255,255,255,0.02)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, fontWeight: 700, color: "#C9D1D9" }}
+          >
+            <span>{tr("دليل الاستخدام", "How To Use")}</span>
+            <span style={{ color: "#FFD93D" }}>↗</span>
+          </button>
+
           {[
-            { ar: "عداد التسبيح الإلكتروني", en: "Digital Tasbeeh Counter", url: "https://do-calculate.com/calculator/ar/tally-counter/" },
             { ar: "مواقيت الصلاة", en: "Prayer Times", url: "https://timesprayer.com/prayer-times-in-cairo.html" },
+            { ar: "عداد التسبيح الإلكتروني", en: "Digital Tasbeeh Counter", url: "https://do-calculate.com/calculator/ar/tally-counter/" },
           ].map((link) => (
-            <a key={link.ar} href={link.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", color: "#C9D1D9", fontSize: 13 }}>
-              • {lang === "ar" ? link.ar : link.en}
+            <a key={link.ar} href={link.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", color: "#C9D1D9", border: "1px solid rgba(200,168,75,0.25)", borderRadius: 10, padding: "10px 12px", background: "rgba(255,255,255,0.02)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, fontWeight: 700 }}>
+              <span>{lang === "ar" ? link.ar : link.en}</span>
+              <span style={{ color: "#FFD93D" }}>↗</span>
             </a>
           ))}
 
@@ -601,26 +799,27 @@ export default function App() {
             href={ISSUES_URL}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ textDecoration: "none", color: "#C9D1D9", border: "1px solid rgba(200,168,75,0.25)", borderRadius: 10, padding: "10px 12px", background: "rgba(255,255,255,0.02)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, fontWeight: 700 }}
+            style={{ textDecoration: "none", color: "#E6EDF3", border: "1px solid rgba(255,217,61,0.55)", borderRadius: 10, padding: "10px 12px", background: "linear-gradient(135deg, rgba(255,217,61,0.14), rgba(255,255,255,0.03))", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, fontWeight: 800, boxShadow: "0 0 0 1px rgba(255,217,61,0.12) inset" }}
           >
             <span>{tr("شاركنا ملاحظاتك أو افتح Issue على GitHub", "Share feedback or open an issue on GitHub")}</span>
-            <span style={{ color: "#FFD93D" }}>↗</span>
+            <span style={{ color: "#0D1117", background: "#FFD93D", borderRadius: 999, width: 22, height: 22, display: "inline-flex", alignItems: "center", justifyContent: "center", fontWeight: 900 }}>↗</span>
           </a>
-
-          <div style={{ marginTop: 6, border: "1px solid rgba(200,168,75,0.25)", borderRadius: 12, padding: 12, background: "rgba(0,0,0,0.18)" }}>
-            <div style={{ color: "#C9D1D9", fontSize: 12, lineHeight: 1.7, marginBottom: 8 }}>
-              {tr("هذه الحاسبة وسيلة مساعدة للتقدير، يرجى دائماً مراجعة دار الإفتاء في الحالات المعقدة لضمان صحة الفريضة.", "This calculator is an estimation aid. Please consult Dar Al-Ifta in complex cases to ensure correct obligation.")}
-            </div>
-            <a href="https://dar-alifta.org/ar/fatwa/details/18349" target="_blank" rel="noopener noreferrer" style={{ color: "#FFD93D", fontSize: 13, fontWeight: 700 }}>
-              {tr("تفاصيل النصاب الشرعي بموقع دار الإفتاء", "Nisab details on Dar Al-Ifta website")}
-            </a>
-          </div>
-
-          <div style={{ marginTop: 4, color: "#8B949E", fontSize: 12, lineHeight: 1.7 }}>
-            <span style={{ color: "#4ECDC4", fontWeight: 700 }}>{tr("تحديث أسعار الذهب", "Gold Price Updates")}: </span>
-            {tr("نراقب أسعار الذهب اليوم لحظة بلحظة لتحديد النصاب الشرعي بدقة، لتسهيل عملية حساب الزكاة للمسلمين في جميع أنحاء العالم.", "We monitor today’s gold prices closely to determine nisab accurately and make Zakah calculation easier for Muslims worldwide.")}
-          </div>
         </div>
+      </div>
+      <div
+        style={{
+          marginTop: 14,
+          borderTop: "1px solid rgba(200,168,75,0.25)",
+          paddingTop: 10,
+          color: "#8B949E",
+          fontSize: 12,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        <span style={{ color: "#4ECDC4", fontWeight: 700 }}>{tr("تحديث أسعار الذهب", "Gold Price Updates")}: </span>
+        {tr("نراقب أسعار الذهب اليوم لحظة بلحظة لتحديد النصاب الشرعي بدقة، لتسهيل عملية حساب الزكاة للمسلمين في جميع أنحاء العالم.", "We monitor today’s gold prices closely to determine nisab accurately and make Zakah calculation easier for Muslims worldwide.")}
       </div>
     </footer>
   );
@@ -671,6 +870,7 @@ export default function App() {
         .lang-btn.active { background: #c8a84b; color: #0d2b22; }
         .github-badge { display: inline-flex; align-items: center; gap: 6px; color: #E6EDF3; text-decoration: none; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 10px; font-size: 13px; font-weight: 700; background: rgba(0,0,0,0.2); }
         .github-badge:hover { border-color: rgba(255,217,61,0.6); color: #FFD93D; }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; white-space: nowrap; }
       `}</style>
 
       <div className="app-bg" />
@@ -685,17 +885,11 @@ export default function App() {
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{ width: 40, height: 40, background: "#3f3f12", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>💰</div>
           <div>
-            <div style={{ fontWeight: 900, fontSize: 18, color: "#E6EDF3" }}>{t.title}</div>
+            <h1 style={{ fontWeight: 900, fontSize: 18, color: "#E6EDF3", margin: 0 }}>{tr("حساب الزكاة وصافي الثروة مصر", "Zakat & Net Worth Calculator Egypt")}</h1>
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
-          {[
-            { id: "about", label: t.tabs.about },
-            { id: "dashboard", label: t.tabs.dashboard },
-            { id: "assets", label: t.tabs.assets },
-            { id: "zakat", label: t.tabs.zakat },
-            { id: "history", label: t.tabs.history },
-          ].map((tab) => (
+          {TABS.map((tab) => (
             <button key={tab.id} className={`tab ${activeTab === tab.id ? "tab-active" : "tab-inactive"}`} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>
           ))}
           <a href={CONTRIBUTION_URL} target="_blank" rel="noopener noreferrer" className="github-badge" title={tr("ساهم في تطوير هذا المشروع", "Contribute to this project")}> 
@@ -712,7 +906,9 @@ export default function App() {
       </div>
 
       <div style={{ padding: "112px 32px 32px", maxWidth: 1400, margin: "0 auto", position: "relative", zIndex: 2 }}>
+        <h2 className="sr-only">{lang === "ar" ? seoMeta.headingAr : seoMeta.headingEn}</h2>
         {activeTab === "about" && aboutSection}
+        {activeTab === "guide" && guideSection}
         {activeTab === "dashboard" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
             <div className="card" style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
@@ -912,7 +1108,7 @@ export default function App() {
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
               <div style={{ overflowX: "auto" }}>
                 <table>
-                  <thead><tr><th>{tr("الأصل", "Asset")}</th><th>{tr("الفئة", "Category")}</th><th>{tr("القيمة الأصلية", "Original Value")}</th><th>{tr("القيمة (ج.م)", "Value (EGP)")}</th><th>{tr("تدفق نقدي", "Cash Flow")}</th><th>{tr("زكاة", "Zakat")}</th><th>{tr("ملاحظات", "Notes")}</th><th>{tr("إجراءات", "Actions")}</th></tr></thead>
+                  <thead><tr><th>{tr("الأصل", "Asset")}</th><th>{tr("الفئة", "Category")}</th><th>{tr("القيمة الأصلية", "Original Value")}</th><th>{tr("القيمة (ج.م)", "Value (EGP)")}</th><th>{tr("زكاة", "Zakat")}</th><th>{tr("ملاحظات", "Notes")}</th><th>{tr("إجراءات", "Actions")}</th></tr></thead>
                   <tbody>
                     {computed.assetsWithEGP.map((a) => (
                       <tr key={a.id}>
@@ -920,7 +1116,6 @@ export default function App() {
                         <td><span style={{ padding: "3px 10px", borderRadius: 20, background: CATEGORY_COLORS[a.category] + "22", color: CATEGORY_COLORS[a.category] || "#8B949E", fontSize: 12, fontWeight: 600 }}>{getCategoryLabel(a.category)}</span></td>
                         <td style={{ fontFamily: "monospace", fontSize: 13 }}>{fmt(a.value)} {a.currency}</td>
                         <td style={{ color: "#4ECDC4", fontWeight: 700 }}>{fmt(Math.round(a.valueEGP))}</td>
-                        <td><span className={`tag ${a.cashFlow ? "tag-yes" : "tag-no"}`}>{a.cashFlow ? tr("نعم", "Yes") : tr("لا", "No")}</span></td>
                         <td><span className={`tag ${a.zakatable ? "tag-yes" : "tag-no"}`}>{a.zakatable ? tr("خاضع", "Eligible") : tr("غير خاضع", "Not Eligible")}</span></td>
                         <td style={{ fontSize: 12, color: "#8B949E", maxWidth: 160 }}>{getAssetNotes(a)}</td>
                         <td><div style={{ display: "flex", gap: 6 }}><button className="btn btn-ghost" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setEditingAsset(a)}>{tr("تعديل", "Edit")}</button><button className="btn btn-danger" style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setAssets((prev) => prev.filter((x) => x.id !== a.id))}>{tr("حذف", "Delete")}</button></div></td>
@@ -1041,7 +1236,7 @@ export default function App() {
         <div className="modal-overlay" onClick={() => setShowAddForm(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 20 }}>{tr("إضافة أصل جديد", "Add New Asset")}</div>
-            <AssetForm lang={lang} asset={{ id: Date.now(), name: "", nameEn: "", category: "نقد وسيولة", description: "", value: 0, currency: "EGP", cashFlow: false, zakatable: true, notes: "", zakatBasis: 1 }} goldPrice24k={goldPrice24k} isNew onSave={(a) => { setAssets((prev) => [...prev, a]); setShowAddForm(false); }} onCancel={() => setShowAddForm(false)} />
+            <AssetForm lang={lang} asset={{ id: Date.now(), name: "", nameEn: "", category: "نقد وسيولة", description: "", value: 0, currency: "EGP", zakatable: true, notes: "", zakatBasis: 1 }} goldPrice24k={goldPrice24k} isNew onSave={(a) => { setAssets((prev) => [...prev, a]); setShowAddForm(false); }} onCancel={() => setShowAddForm(false)} />
           </div>
         </div>
       )}
@@ -1204,12 +1399,13 @@ function AssetForm({ lang, asset, goldPrice24k, isNew, onSave, onCancel }) {
       )}
       <div className="grid2">
         <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}><input type="checkbox" checked={form.zakatable} onChange={(e) => set("zakatable", e.target.checked)} style={{ width: "auto", accentColor: "#FFD93D" }} /><span style={{ fontSize: 14 }}>{tr("خاضع للزكاة", "Zakat Eligible")}</span></label>
-        <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}><input type="checkbox" checked={form.cashFlow} onChange={(e) => set("cashFlow", e.target.checked)} style={{ width: "auto", accentColor: "#4ECDC4" }} /><span style={{ fontSize: 14 }}>{tr("تدفق نقدي", "Cash Flow")}</span></label>
       </div>
       <div><label style={{ fontSize: 12, color: "#8B949E", display: "block", marginBottom: 6 }}>{tr("ملاحظات", "Notes")}</label><input value={form.notes} onChange={(e) => set("notes", e.target.value)} /></div>
       <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 8 }}>
         <button className="btn btn-ghost" onClick={onCancel}>{tr("إلغاء", "Cancel")}</button>
-        <button className="btn btn-gold" onClick={() => onSave(form)}>{isNew ? tr("إضافة", "Add") : tr("حفظ التعديلات", "Save Changes")}</button>
+        <button className="btn btn-gold" onClick={() => onSave(form)}>
+          {isNew ? tr("إضافة", "Add") : tr("حفظ التعديلات", "Save Changes")}
+        </button>
       </div>
     </div>
   );
