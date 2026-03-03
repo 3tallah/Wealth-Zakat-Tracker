@@ -18,6 +18,7 @@ A simple bilingual (Arabic/English) Zakah and wealth tracking app that helps use
 ## ✨ Features
 This app is designed to make Zakah estimation clear, practical, and fast for day-to-day use.
 
+- **Single-Page Navigation:** All sections (About, Dashboard, Assets, Zakat, History) are tabs inside one page/route.
 - **Bilingual UI (Arabic/English):** Switch language instantly with RTL/LTR support.
 - **Smart Asset Tracking:** Manage assets by category with automatic EGP normalization.
 - **Gold-Specific Workflow:** Enter gold by karat weights (18/21/24), auto-convert to pure gold, and calculate value from live gold price.
@@ -29,16 +30,16 @@ This app is designed to make Zakah estimation clear, practical, and fast for day
 ## 📸 Screenshots
 
 ### About
-![About Page](screenshots/about.png)
+![About Tab](screenshots/about.png)
 
 ### Dashboard
-![Dashboard Page](screenshots/dashboard.png)
+![Dashboard Tab](screenshots/dashboard.png)
 
 ### Assets
-![Assets Page](screenshots/assets.png)
+![Assets Tab](screenshots/assets.png)
 
 ### History
-![History Page](screenshots/history.png)
+![History Tab](screenshots/history.png)
 
 ## 💱 Supported Currencies
 | Code | Currency | Symbol |
@@ -78,10 +79,36 @@ This app is designed to make Zakah estimation clear, practical, and fast for day
 - **Language/UI:** Arabic/English with RTL/LTR support
 - **Runtime:** Browser-based single-page app
 
+## 🔎 SEO Strategy (React 18 + Vite 5)
+- **Current architecture:** Single-page app with tab-based navigation in one canonical URL.
+- **Indexing setup:** Canonical URL, hreflang tags (`ar`, `en`, `x-default`), `sitemap.xml`, and `robots.txt` are configured.
+- **Rich snippets:** JSON-LD for `WebApplication` and `FAQPage` is included in `index.html`.
+- **Social previews:** Open Graph and Twitter meta tags are included for better sharing previews.
+- **When to move to SSR/SSG:** If you later add multiple content-heavy, SEO-targeted pages (guides/blog/landing pages), use SSR/SSG (for example, Remix/Next.js or a Vite SSR/SSG approach).
+- **Performance baseline:** Vite build uses manual chunk splitting (`react-vendor`, `charts-vendor`, `export-vendor`). Keep lazy-loading heavy sections and optimize images/scripts to support Core Web Vitals.
+
+### Google Search Central Checklist
+- Set up and verify Google Search Console for `https://zakat.mahmoudatallah.com/`.
+- Submit `https://zakat.mahmoudatallah.com/sitemap.xml` in Search Console.
+- Use URL Inspection to confirm Google can render the page and load JS/CSS resources.
+- Monitor indexing and Core Web Vitals reports before and after major releases.
+- Keep page titles and meta descriptions clear, specific, and user-focused.
+
+### What Not to Focus On
+- `meta keywords` is not used by Google Search.
+- Keyword stuffing does not help rankings and hurts readability.
+- There is no magic word-count target for ranking.
+- Domain TLD alone is usually a low-impact ranking signal.
+
+### Bundle Analysis
+- Run production build: `npm run build`
+- Generate bundle report: `npm run analyze`
+- Open `dist/stats.html` to inspect largest modules and identify lazy-loading opportunities.
+
 ## 🔒 Privacy
 - No data is sent anywhere except the exchange rate API request (which sends no personal data).
 - All Zakat calculations happen entirely in your browser.
-- No cookies, no analytics, no tracking.
+- No cookies are used by the app logic. A Google Analytics tag may be enabled in production builds for traffic measurement.
 
 ## Why This Tool Is Useful
 This tool is designed for end users who want a practical way to estimate their Zakah with transparent inputs and clear summaries. It reduces manual calculation errors and keeps everything in one place during the active browser session.
@@ -153,6 +180,7 @@ If your repository is on GitHub, also set the same repo URL in the app constant 
 - Internet access (for exchange rates and gold API updates)
 
 ## Usage
+- Use the top navigation tabs to switch sections inside the same page.
 - Go to **Assets** to add assets.
 - Use **Debts** section in Dashboard to add/remove debts.
 - For **Gold** assets, enter weights (18/21/24) and let the app auto-calculate value from the live gold price.
